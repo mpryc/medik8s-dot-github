@@ -46,6 +46,12 @@ jobs:
           GO_VERSION=$(grep '^go:' /tmp/go-version.yaml | sed 's/^go: *"\?\([^"]*\)"\?/\1/')
           CI_IMAGE=$(grep '^ci-operator-image:' /tmp/go-version.yaml | sed 's/^ci-operator-image: *"\?\([^"]*\)"\?/\1/')
 
+          if [ -z "${GO_VERSION}" ] || [ -z "${CI_IMAGE}" ]; then
+            echo "::error::Failed to parse version config — go='${GO_VERSION}' ci-image='${CI_IMAGE}'"
+            cat /tmp/go-version.yaml
+            exit 1
+          fi
+
           echo "go=${GO_VERSION}" >> "${GITHUB_OUTPUT}"
           echo "ci-image=${CI_IMAGE}" >> "${GITHUB_OUTPUT}"
           echo "Go version: ${GO_VERSION}"
@@ -73,7 +79,7 @@ jobs:
           fi
 
           if [ -f .ci-operator.yaml ]; then
-            CURRENT_IMAGE=$(grep 'tag:' .ci-operator.yaml | sed 's/.*tag: *"\?\([^"]*\)"\?/\1/')
+            CURRENT_IMAGE=$(grep '^ *tag:' .ci-operator.yaml | head -1 | sed 's/.*tag: *"\?\([^"]*\)"\?/\1/')
             if [ "${CURRENT_IMAGE}" = "${TARGET_CI_IMAGE}" ]; then
               echo "CI image already at ${TARGET_CI_IMAGE}"
               echo "ci-update=false" >> "${GITHUB_OUTPUT}"
@@ -122,7 +128,7 @@ jobs:
       - name: Check for changes
         id: changes
         run: |
-          if git diff --quiet; then
+          if [ -z "$(git status --porcelain)" ]; then
             echo "No file changes — everything is up to date"
             echo "has-changes=false" >> "${GITHUB_OUTPUT}"
           else
@@ -151,7 +157,7 @@ jobs:
 
       - name: Create Pull Request
         if: "!inputs.dry-run && steps.changes.outputs.has-changes == 'true'"
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7.0.11
         with:
           token: ${{ github.token }}
           commit-message: "chore: update Go to ${{ steps.config.outputs.go }} and dependencies (${{ inputs.version-schema }})"
